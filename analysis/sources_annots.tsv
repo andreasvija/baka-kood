@@ -1,0 +1,2 @@
+study_name	count_matrix	pheno_meta	sample_meta	vcf	tpm_file
+bwa_cage_annots	/gpfs/hpc/home/andreasv/baka/pipeline/new_annots/new_annots/normalised/txrev/qtl_group_split_norm/GEUVADIS.LCL.tsv	/gpfs/hpc/projects/genomic_references/annotations/txrevise/Homo_sapiens.GRCh38.96_CAGE_25bp/txrevise_Ensembl_96_CAGE_25bp_phenotype_metadata.tsv.gz	/gpfs/hpc/home/andreasv/baka/analysis/GEUVADIS_EUR.tsv	/gpfs/hpc/projects/genomic_references/GEUVADIS/genotypes/GEUVADIS_GRCh38_filtered.vcf.gz	/gpfs/hpc/home/andreasv/baka/qtlmap_prep/null.txt

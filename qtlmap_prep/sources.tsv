@@ -1,0 +1,2 @@
+study_name	count_matrix	pheno_meta	sample_meta	vcf	tpm_file
+bwa_cage_comparison	/gpfs/hpc/home/andreasv/baka/qtlmap_prep/countMatrix.tsv	/gpfs/hpc/home/andreasv/baka/qtlmap_prep/phenotypeMetadata.tsv	/gpfs/hpc/home/andreasv/baka/qtlmap_prep/sampleMetadata.tsv	/gpfs/hpc/projects/GENCORD/Garieri_2017/Garieri_filtered.no_DS.vcf.gz	/gpfs/hpc/home/andreasv/baka/qtlmap_prep/null.txt

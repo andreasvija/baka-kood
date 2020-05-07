@@ -1,0 +1,300 @@
+---
+title: "Analysis"
+subtitle: Andreas Vija
+output:
+  html_document:
+    df_print: paged
+  pdf: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+wd = "C:/Proge/Ülikool/baka/analysis/"
+setwd(wd)
+
+library("GenomicFeatures")
+library("dplyr")
+library("ggplot2")
+library("readr")
+library("stringr")
+library("reshape2")
+library("tidyr")
+
+set.seed(123)
+```
+
+# BWA
+
+```{r}
+col_names = c("gene", "chr", "phenotype_start", "phenotype_end", "strand", "top_phenotype", "total_phenotypes", "variants_tested", "variant_distance", "top_variant", "top_variant_chr", "top_variant_start", "top_variant_end", "df", "dummy", "beta_1", "beta_2", "p_nominal", "slope", "p_adjusted", "p_adjusted_beta")
+col_types = "cciicciiicciiiddddddd"
+
+bwa_results = read_delim("bwa.permuted.txt", delim=" ", col_types=col_types, col_names=col_names)
+bwa_results$p_adjusted_beta_adjusted = p.adjust(bwa_results$p_adjusted_beta, method="fdr")
+```
+
+```{r}
+ggplot(mapping=aes(x=bwa_results$p_adjusted_beta_adjusted)) + 
+  geom_histogram()
+sum(bwa_results$p_adjusted_beta_adjusted < 0.05)
+
+ggplot(mapping=aes(x=abs(bwa_results$variant_distance[bwa_results$p_adjusted_beta_adjusted < 0.05]))) + 
+  geom_histogram()
+```
+
+```{r}
+bwa_tops = bwa_results %>%
+  filter(p_adjusted_beta_adjusted < 0.05) %>%
+  arrange(p_adjusted_beta_adjusted)
+```
+
+# txrevise
+
+```{r}
+txrevise_results = read_delim("txrev.permuted.txt", delim=" ", col_types=col_types, col_names=col_names)
+txrevise_results$p_adjusted_beta_adjusted = p.adjust(txrevise_results$p_adjusted_beta, method="fdr")
+
+fun = function(x, n=1) {
+  return(strsplit(x, ".", fixed=TRUE)[[1]][n])
+}
+txrevise_results = txrevise_results %>%
+  mutate(kind=sapply(gene, fun, n=2), gene=sapply(gene, fun, n=1)) %>%
+  filter(kind=="upstream")
+```
+
+```{r}
+ggplot(mapping=aes(x=txrevise_results$p_adjusted_beta_adjusted)) + 
+  geom_histogram()
+sum(txrevise_results$p_adjusted_beta_adjusted < 0.05)
+
+ggplot(mapping=aes(x=abs(txrevise_results$variant_distance[txrevise_results$p_adjusted_beta_adjusted < 0.05]))) +
+  geom_histogram()
+```
+
+```{r}
+tx_tops = txrevise_results %>%
+  filter(p_adjusted_beta_adjusted < 0.05) %>%
+  arrange(p_adjusted_beta_adjusted)
+```
+
+```{r}
+upstream1 = GenomicFeatures::makeTxDbFromGFF("txrevise.grp_1.upstream.gff3")
+upstream2 = GenomicFeatures::makeTxDbFromGFF("txrevise.grp_2.upstream.gff3")
+genes1 = AnnotationDbi::select(upstream1, keys=keys(upstream1, "GENEID"), keytype="GENEID", columns="GENEID")
+genes2 = AnnotationDbi::select(upstream2, keys=keys(upstream2, "GENEID"), keytype="GENEID", columns="GENEID")
+genes1 = unlist(genes1, use.names=FALSE)
+genes2 = unlist(genes2, use.names=FALSE)
+
+genes = unique(c(sapply(genes1, fun), sapply(genes2, fun)))
+
+old_genes = unlist(txrevise_results$gene, use.names=FALSE)
+new_genes = setdiff(genes, old_genes)
+additional = data_frame(gene=new_genes, chr="_", phenotype_start=1, phenotype_end=1, strand="_", top_phenotype="_", 
+                        total_phenotypes=1, variants_tested=1, variant_distance=1, top_variant="_", top_variant_chr="_", 
+                        top_variant_start=1, top_variant_end=1, df=1, dummy=1, beta_1=1, beta_2=1, p_nominal=0.99, 
+                        slope=1, p_adjusted=0.99, p_adjusted_beta=0.99, p_adjusted_beta_adjusted=0.99, kind="upstream")
+txrevise_results = rbind(txrevise_results, additional)
+```
+
+# With annots
+
+```{r}
+annots_results = read_delim("txrev_annots_25.permuted.txt", delim=" ", col_types=col_types, col_names=col_names)
+annots_results$p_adjusted_beta_adjusted = p.adjust(annots_results$p_adjusted_beta, method="fdr")
+
+annots_results = annots_results %>%
+  mutate(kind=sapply(gene, fun, n=2), gene=sapply(gene, fun, n=1)) %>%
+  filter(kind=="upstream")
+```
+
+```{r}
+ggplot(mapping=aes(x=annots_results$p_adjusted_beta_adjusted)) + 
+  geom_histogram()
+sum(annots_results$p_adjusted_beta_adjusted < 0.05)
+
+ggplot(mapping=aes(x=abs(annots_results$variant_distance[annots_results$p_adjusted_beta_adjusted < 0.05]))) +
+  geom_histogram()
+```
+
+```{r}
+ann_tops = annots_results %>%
+  filter(p_adjusted_beta_adjusted < 0.05) %>%
+  arrange(p_adjusted_beta_adjusted)
+```
+
+```{r}
+old_genes = unlist(annots_results$gene, use.names=FALSE)
+new_genes = setdiff(genes, old_genes)
+additional = data_frame(gene=new_genes, chr="_", phenotype_start=1, phenotype_end=1, strand="_", top_phenotype="_", 
+                        total_phenotypes=1, variants_tested=1, variant_distance=1, top_variant="_", top_variant_chr="_", 
+                        top_variant_start=1, top_variant_end=1, df=1, dummy=1, beta_1=1, beta_2=1, p_nominal=0.99, 
+                        slope=1, p_adjusted=0.99, p_adjusted_beta=0.99, p_adjusted_beta_adjusted=0.99, kind="upstream")
+annots_results = rbind(annots_results, additional)
+```
+
+# Analysis
+
+```{r}
+dim(bwa_results)[1] # BWA total: 19845
+sum(bwa_results$total_phenotypes) # BWA promotor total: 95926 (pre-qtlmap number bigger cause only chr 1-22 here)
+dim(txrevise_results)[1] # txrevise total: 20176
+dim(annots_results)[1] # annots total: 20176
+length(intersect(bwa_results$gene, txrevise_results$gene)) # common total: 15137
+length(intersect(bwa_results$gene, annots_results$gene)) # same
+
+dim(bwa_tops)[1] # BWA tops: 1341
+dim(tx_tops)[1] # txrevise tops: 1258
+dim(ann_tops)[1] # annots tops: [10] 1397 (+139) [25] 1341 (+83)
+
+sum(bwa_tops$gene %in% txrevise_results$gene) # common BWA tops: 1224
+sum(tx_tops$gene %in% bwa_results$gene) # common txrevise tops: 1156
+sum(ann_tops$gene %in% bwa_results$gene) # common annots tops: [10] 1295 (+139) [25] 1241 (+85)
+
+removed = setdiff(tx_tops$gene, ann_tops$gene)
+length(removed) # annotations removed: [10] 287 [25] 237
+added = setdiff(ann_tops$gene, tx_tops$gene)
+length(added) # annotations added: [10] 426 [25] 320
+
+length(intersect(bwa_tops$gene, tx_tops$gene)) # common both tops: 328
+length(intersect(bwa_tops$gene, ann_tops$gene)) # common after tops: [10] 376 (+48) [25] 342 (+14)
+
+bwa_common_tops = bwa_tops[bwa_tops$gene %in% txrevise_results$gene,]
+tx_common_tops = tx_tops[tx_tops$gene %in% bwa_results$gene,]
+
+length(intersect(bwa_tops$top_variant, tx_tops$top_variant)) # 44
+length(intersect(bwa_tops$top_variant, ann_tops$top_variant)) # [10] 59 [25] 47
+```
+
+
+```{r}
+to_visualize = bwa_common_tops[! bwa_common_tops$gene %in% tx_common_tops$gene,] %>% #896
+  select(gene, top_variant)
+write_tsv(to_visualize, "bwa_better.tsv")
+
+to_visualize = tx_common_tops[! tx_common_tops$gene %in% bwa_common_tops$gene,] %>% #828
+  select(gene, top_variant)
+write_tsv(to_visualize, "tx_better.tsv")
+```
+
+```{r}
+getgrouping = function(x) {
+  if (x %in% added) {return("Muutus oluliseks")}
+  if (x %in% removed) {return("Kaotas olulisuse")}
+  return("Ei muutunud")
+}
+
+comparison = merge(select(bwa_results, gene, p_adjusted_beta_adjusted),
+                   select(txrevise_results, gene, p_adjusted_beta_adjusted),
+                   by="gene")
+colnames(comparison) = c("gene", "bwa_p", "tx_p")
+comparison$grouping = as.factor(sapply(comparison$gene, getgrouping))
+comparison = arrange(comparison, grouping)
+
+fig1 = ggplot(comparison, aes(x=-log10(tx_p), y=-log10(bwa_p), color=grouping)) + 
+  labs(x="txrevise -log10(p)", y="CAGE -log10(p)", color="Olulisus") +
+  geom_smooth(aes(x=-log10(tx_p), y=-log10(bwa_p)), inherit.aes=FALSE, method="lm")
+
+
+comparison = merge(select(bwa_results, gene, p_adjusted_beta_adjusted),
+                   select(annots_results, gene, p_adjusted_beta_adjusted),
+                   by="gene")
+colnames(comparison) = c("gene", "bwa_p", "ann_p")
+comparison$grouping = as.factor(sapply(comparison$gene, getgrouping))
+comparison = arrange(comparison, grouping)
+
+fig2 = ggplot(comparison, aes(x=-log10(ann_p), y=-log10(bwa_p), color=grouping)) + 
+  labs(x="Täiendatud txrevise -log10(p)", y="CAGE -log10(p)", color="Olulisus") +
+  geom_smooth(aes(x=-log10(ann_p), y=-log10(bwa_p)), inherit.aes=FALSE, method="lm")
+
+
+comparison = merge(select(annots_results, gene, p_adjusted_beta_adjusted),
+                   select(txrevise_results, gene, p_adjusted_beta_adjusted),
+                   by="gene")
+colnames(comparison) = c("gene", "ann_p", "tx_p")
+comparison$grouping = as.factor(sapply(comparison$gene, getgrouping))
+comparison = arrange(comparison, grouping)
+
+fig3 = ggplot(comparison, aes(x=-log10(tx_p), y=-log10(ann_p), color=grouping)) + 
+  labs(x="txrevise -log10(p)", y="Täiendatud txrevise -log10(p)", color="Olulisus") +
+  geom_smooth(aes(x=-log10(tx_p), y=-log10(ann_p)), inherit.aes=FALSE, method="lm")
+
+
+for (fig in list(fig1, fig2, fig3)) {
+  print(fig + 
+          geom_segment(x=0, y=0, xend=120, yend=120, color="black") + 
+          geom_point(aes(color=grouping), alpha=0.4) +
+          scale_color_manual(values=c("dark gray", "red", "green")) +
+          xlim(0,50) + ylim(0,50) + 
+          theme(legend.position="top"))
+}
+```
+
+```{r}
+sample_mapping = read_tsv("../qtlmap_prep/sampleMetadata.tsv") %>%
+  select(sample_id, genotype_id) %>%
+  mutate(source="cage")
+sample_mapping_ = read_tsv("GEUVADIS_EUR.tsv") %>%
+  select(sample_id, genotype_id) %>%
+  mutate(source="txrevise")
+sample_mapping = rbind(sample_mapping, sample_mapping_)
+
+genotypes = read_tsv("variantinfo.vcf")[c(3,10:163)] %>%
+  melt(id.vars=c("ID")) %>%
+  mutate(source="cage")
+genotypes_ = read_tsv("variantinfo_geuvadis.vcf")[c(3,10:454)] %>%
+  melt(id.vars=c("ID")) %>%
+  mutate(source="txrevise")
+genotypes = rbind(genotypes, genotypes_)
+
+names(genotypes) = c("variant", "genotype_id", "alleles", "source")
+genotypes = genotypes %>%
+  merge(sample_mapping) %>%
+  select(-genotype_id, -source)
+
+mapping = list(0, 1, 1, 2)
+names(mapping) = c("0|0", "0|1", "1|0", "1|1")
+genotypes$alleles = mapping[genotypes$alleles]
+
+counts_bwa = read_tsv("../qtlmap_prep/countMatrix.tsv") %>%
+  melt(id.vars=c("phenotype_id"), variable.name=c("sample_id"), value.name="proportion")
+#counts_tx = read_tsv("/countMatrix_txrevise.tsv") %>% # 2.3G raw
+#  melt(id.vars=c("phenotype_id"), variable.name=c("sample_id"), value.name="proportion")
+
+#dataset, counts file, promoter, variant
+for (info in list(
+  list(bwa_tops, 1, counts_bwa),
+  list(bwa_tops, 2, counts_bwa)
+)) {
+  dataset = info[[1]]
+  n = info[[2]]
+  counts = info[[3]]
+  
+  this_promoter = dataset$top_phenotype[n]
+  this_variant = dataset$top_variant[n]
+  
+  counts_subset = filter(counts, phenotype_id==this_promoter) %>%
+    select(sample_id, proportion)
+  genotypes_subset = filter(genotypes, variant==this_variant) %>%
+    select(sample_id, alleles)
+  to_plot = merge(counts_subset, genotypes_subset)
+  to_plot$alleles = as.numeric(to_plot$alleles)
+  
+  coef = coef(lm(proportion ~ alleles, data=to_plot))
+  p = ggplot(to_plot, aes(x=alleles, y=proportion, group=as.factor(alleles))) + 
+        geom_jitter(width=0.1, color="black", alpha=0.7) + 
+        geom_boxplot(alpha=0, lwd=1, color="black") +
+        scale_x_continuous(breaks=c(0,1,2)) + 
+        geom_abline(intercept=coef[1], slope=coef[2], lwd=1) + 
+        labs(x="Aternatiivsete alleelide arv", y="Promootori normaliseeritud osakaalud")
+  print(p)
+}
+```
+

@@ -1,0 +1,281 @@
+---
+title: "Convert"
+subtitle: Andreas Vija
+output:
+  pdf_document: default
+  pdf: default
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+# This notebook uses featureCounts output and promoter annotations to build a count matrix 
+# and converts promoter annotations and sample metadata to the format qtlmap wants
+
+# except for the third block, which is meant to be run before even converting promoter annotations to gtf format
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+setwd("C:/Proge/Ülikool/baka/qtlmap_prep")
+```
+
+```{r}
+library("dplyr")
+library("ggplot2")
+library("readr")
+library("stringr")
+library("reshape2")
+library("tidyr")
+set.seed(123)
+```
+
+
+```{r}
+
+# remove promoters with multiple genes from promoter annotations
+
+promoterAnnots = read_tsv("FANTOM5_promoter_annotations.tsv", col_types="ciciciiccii")
+'
+#dim(table(data$promoter)[table(data$promoter) != 1])/length(unique(data$promoter)) # <0.7% promoters removed by removing duplicates
+
+not_dupes = promoterAnnots %>%
+  select(tss_id) %>%
+  group_by(tss_id) %>%
+  mutate(n=n()) %>%
+  ungroup() %>%
+  filter(n==1) %>%
+  select(tss_id)
+
+promoterAnnots = inner_join(promoterAnnots, not_dupes, by="tss_id")
+
+# remove genes not in our data and whose naems have multiple ID-s
+
+promoterMeta = read_tsv("transcript_usage_Ensembl_96_phenotype_metadata.tsv", col_types="ccccciicccci") %>%
+  select(gene_id, gene_name) %>%
+  unique()
+promoterMeta = promoterMeta[promoterMeta$gene_name %in% promoterAnnots$gene_name,]
+
+duplicatedGenes = promoterMeta %>% 
+  group_by(gene_name) %>% 
+  summarise(n=n()) %>% 
+  ungroup() %>%
+  filter(n > 1)
+duplicatedGenes = duplicatedGenes$gene_name
+
+promoterMeta = promoterMeta[!(promoterMeta$gene_name %in% duplicatedGenes),]
+
+# make gene column ENSEMBL ID
+
+joined = inner_join(promoterAnnots, promoterMeta, by=c("gene_name"))
+fantom_genes = unique(promoterAnnots$gene_name)
+overlap_genes = unique(joined$gene_name)
+
+1 - length(overlap_genes)/length(fantom_genes) # <9% genes not mapped uniquely, most LOCXXXXX (what means?), others probably findable in Ensembl
+missing = fantom_genes[!(fantom_genes %in% overlap_genes)]
+
+promoterAnnots = left_join(promoterAnnots, promoterMeta, by=c("gene_name"))
+promoterAnnots$gene_name[!is.na(promoterAnnots$gene_id)] = promoterAnnots$gene_id[!is.na(promoterAnnots$gene_id)]
+promoterAnnots = promoterAnnots %>% select(-gene_id)
+
+write.table(promoterAnnots, file="FANTOM5_promoter_annotations.tsv", sep="\t", row.names=FALSE, quote=FALSE)
+'
+```
+
+```{r}
+summ = read_tsv("bwa.counts.summary", col_types = paste0(c("c", rep("n", 154)), collapse=""))
+summ = unname(summ[c(1,2,10),])
+summ = t(summ)[2:155,]
+
+assigned = as.numeric(summ[,1])
+unmapped = as.numeric(summ[,2])
+nofeatures = as.numeric(summ[,3])
+
+ggplot() + geom_histogram(aes(x=assigned, fill="assigned")) + 
+  geom_histogram(aes(x=unmapped, fill="unmapped")) + 
+  geom_histogram(aes(x=nofeatures, fill="nofeatures"))
+
+assigned_total = sum(assigned)
+unmapped_total = sum(unmapped)
+nofeatures_total = sum(nofeatures)
+total = assigned_total + unmapped_total + nofeatures_total
+
+assigned_total / total #  35.4%
+unmapped_total / total #   4.8%
+nofeatures_total / total #59.8%
+```
+
+
+```{r}
+data = read_tsv("bwa.counts", skip=1, col_types = paste0(c("ccnncn", rep("n", 154)), collapse=""))
+data = select(data, -"Chr", -"Start", -"End", -"Strand", -"Length")
+
+renamer <- function(name) {
+  name = str_replace(name, "Geneid", "promoter")
+  name = str_replace(name, "../align/results/", "")
+  name = str_replace(name, ".sorted.bam", "")
+  return(name)
+}
+colnames(data) = unname(sapply(colnames(data), renamer))
+```
+
+
+```{r}
+genepromoters = read_tsv("FANTOM5_promoter_annotations.tsv", col_names=c("promoter", "temp", "gene"), skip=1)
+genepromoters = select(genepromoters, -"temp")
+
+# add gene name in addition to promoter
+data = inner_join(genepromoters, data, by="promoter")
+remove(genepromoters)
+
+data = melt(data, id.vars=c("gene", "promoter"), variable.name="sample", value.name="count")
+data$sample = as.character(data$sample)
+```
+
+```{r}
+geneCountsInPerson = data %>%
+  group_by(gene, sample) %>%
+  summarise(geneCount=sum(count)) %>%
+  ungroup()
+
+geneCounts = geneCountsInPerson %>%
+  group_by(gene) %>%
+  summarise(geneCount=sum(geneCount)) %>%
+  ungroup()
+
+'
+summary(geneCountsInPerson)
+
+ggplot(data=geneCountsInPerson, aes(x=geneCount+1e-1)) + #+1e-1 allows to see zeroes
+  geom_histogram() + 
+  scale_x_log10() + 
+  labs(title="Promoter reads per gene in one person")
+
+ggplot(data=geneCounts, aes(x=geneCount+1e-1)) + 
+  geom_histogram() + 
+  scale_x_log10() + 
+  labs(title="Promoter reads per gene over all people")
+'
+```
+
+```{r}
+# filter out non-detected genes
+lower_threshold = 0
+commonGenes = (filter(geneCounts, geneCount > lower_threshold))$gene #1070/21841 are zeroes
+data = filter(data, gene %in% commonGenes) #278278/15634388 samples removed
+
+#calculate promoter proportions
+data = inner_join(geneCountsInPerson, data, by=c("gene", "sample"))
+
+data = data %>%
+  mutate(promoterProportion = count/geneCount) %>%
+  select(gene, sample, promoter, promoterProportion)
+
+ggplot(mapping=aes(x=data$promoterProportion)) + 
+  geom_histogram() + 
+  labs(title="Proportions of promoters' importances")
+```
+
+
+```{r}
+# create count matrix
+
+data = data %>%
+  mutate(phenotype_id=promoter, sample_id=sample) %>%
+  select(phenotype_id, sample_id, promoterProportion) %>%
+  unique()
+
+countMatrix = data %>% dcast(phenotype_id ~ sample_id, sum, value.var="promoterProportion")
+```
+
+
+```{r}
+phenotype_id = countMatrix[,1]
+numerics = countMatrix[,2:155]
+
+# Replace NAs with row means
+na_indexes = which(is.na(numerics), arr.ind=TRUE)
+numerics[na_indexes] = rowMeans(numerics, na.rm=TRUE)[na_indexes[,1]]
+
+# inverse normal transformation
+int <- function(arr) {
+  return(qnorm( rank(arr, ties.method="random") / (length(arr)+1) )) # +1 because 100% quantile is infinity
+}
+numerics = as.data.frame(t(apply(numerics, 1, int)))
+
+countMatrix = cbind(phenotype_id, numerics)
+```
+
+
+```{r}
+write.table(countMatrix, file="countMatrix.tsv", sep="\t", row.names=FALSE, quote=FALSE)
+```
+
+
+```{r}
+# convert FANTOM5 promoter metadata into pipeline format (phenotype_id, group_id, gene_id, chromosome, phenotype_pos, strand)
+
+# calculate placeholder phenotype_pos as promotor average position
+
+promoterMetadata = read_tsv("FANTOM5_promoter_annotations.tsv", col_types="ciciciiccii") %>%
+  mutate(phenotype_id=tss_id, group_id=gene_name, gene_id=gene_name, chromosome=chr, promoter_pos=peak_start, tss_pos=tss_start, strand=if_else(strand == "+", "1", "-1")) %>% 
+  select(phenotype_id, group_id, gene_id, chromosome, promoter_pos, tss_pos, strand)
+
+max_pos = max(max(promoterMetadata$tss_pos), max(promoterMetadata$promoter_pos))
+
+genePromoterPositions = promoterMetadata %>%
+  group_by(gene_id) %>%
+  summarise(n=n(), avg_tss=mean(tss_pos), furthest_tss=max(tss_pos)-min(tss_pos), 
+            avg_prom=mean(promoter_pos), furthest_prom=max(promoter_pos)-min(promoter_pos)) %>%
+  ungroup()
+
+ggplot(genePromoterPositions, aes(x=furthest_tss+1e-1)) + 
+  geom_histogram() + 
+  scale_x_log10() + 
+  labs(title="Every gene's TSS span")
+
+ggplot(genePromoterPositions, aes(x=furthest_prom+1e-1)) + 
+  geom_histogram() + 
+  scale_x_log10() + 
+  labs(title="Every gene's promoter span")
+
+# some very large TSS spans here?
+
+sum(genePromoterPositions$furthest_prom > 200000)/length(genePromoterPositions$furthest_prom) 
+# 2.5% of genes won't even have all promoter locations captured in a 200kb search range, 0.6% for 500kb, 0.1% for 1Mb
+
+geneAvgs = promoterMetadata %>%
+  group_by(gene_id) %>%
+  summarise(phenotype_pos = as.integer(mean(promoter_pos))) %>%
+  ungroup()
+
+promoterMetadata = promoterMetadata %>%
+  inner_join(geneAvgs, by='gene_id') %>%
+  select(phenotype_id, group_id, gene_id, chromosome, phenotype_pos, strand)
+
+# replace phenotype pos with the gene's location where possible
+
+promoterMeta = read_tsv("transcript_usage_Ensembl_96_phenotype_metadata.tsv", col_types="ccccciicccci") %>%
+  select(gene_id, phenotype_pos) %>%
+  unique() %>%
+  mutate(gene_pos = phenotype_pos) %>%
+  select(gene_id, gene_pos)
+
+promoterMetadata = promoterMetadata %>% left_join(promoterMeta, by='gene_id')
+promoterMetadata$phenotype_pos[!(is.na(promoterMetadata$gene_pos))] = promoterMetadata$gene_pos[!(is.na(promoterMetadata$gene_pos))]
+
+promoterMetadata = promoterMetadata %>% 
+  select(phenotype_id, group_id, gene_id, chromosome, phenotype_pos, strand)
+write.table(promoterMetadata, file="phenotypeMetadata.tsv", sep="\t", row.names=FALSE, quote=FALSE)
+```
+
+
+```{r}
+#convert sample metadata into pipeline format (sample_id, genotype_id, qtl_group)
+
+sampleMetadata = read_tsv("Garieri_sample_metadata.txt") %>%
+  mutate(qtl_group="LCL") %>%
+  select(sample_id, genotype_id, qtl_group)
+
+write.table(sampleMetadata, file="sampleMetadata.tsv", sep="\t", row.names=FALSE, quote=FALSE)
+```

@@ -1,0 +1,1 @@
+phenotype_id	study	qtl_group	median_tpm
