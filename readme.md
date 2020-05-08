@@ -1,8 +1,11 @@
-# CAGE tehnoloogia abil promootorite kasutust mõjutavate geneetiliste variantide leidmine
-Bakalaureusetöö käigus kirjutatud R kood, Linux shell skriptid, Snakemake töövood ja mõned algandmed. Töö saadaval [siin](TODO:link).
+# Promootorite kasutust mõjutavate geneetiliste variantide leidmine CAGE tehnoloogia abil
+
+Bakalaureusetöö käigus kirjutatud R kood, Linux shell skriptid, Snakemake töövood ja mõned algandmed. Töö saadaval [siin](http://kodu.ut.ee/~andreasv/Vija_Informaatika_2020.pdf).
 
 ##### Lühikokkuvõte:
-TODO
+
+Geenide avaldumist mõjutavad palju geeni alguse lähedal asuvad DNA lõigud, mida kutsutakse promootoriteks. Ühel geenil võib olla mitu erinevat promootorit, millest võivad saada alguse erinevad transkriptid. Promootorite kasutuse erinevused inimeste vahel on seotud mitmete haiguste tekkeriskidega. Levinuim viis transkriptide mõõtmiseks on RNA sekveneerimine (RNA-seq), aga selle meetodi signaal on transkriptide alguses nõrk. CAGE (cap analysis of gene expression) on meetod, mis keskendub transkriptide algustele ja suudab seega promootorite kasutust paremini määrata. Töö eesmärgiks oli uurida, kas CAGE tehnoloogia abil on võimalik paremini määrata geneetiliste variantide mõju promootorite kasutusele kui palju levinuma RNA-seq meetodi abil. Töö käigus leiti, et CAGE on selle eesmärgi jaoks tõenäoliselt veidi parem. Veel koostati CAGE-i abil loodud promootorite annotatsioonide põhjal täiendavaid RNA-seq transkriptide annotatsioone. Lisatud annotatsioonide abil paranes RNA-seq võime üles leida promootorite kasutust mõjutavaid geneetilisi variante, aga annotatsioonide loomise algoritm vajab veel täiendamist, sest põhjustab ka väärpositiivseid tulemusi.
 
 ##### Abstract:
-TODO
+
+Gene expression is heavily influenced by promoters, which are special DNA regions near the starts of genes. Differential promoter usage has been associated with multiple complex diseases. Among other things, promoters dictate the transcripts that are created based on DNA. Although RNA sequencing (RNA-seq) is commonly used to measure transcription, its signal is relatively weak at the start of transcripts. Cap analysis of gene expression (CAGE) is a method that focuses on the beginnings of transcripts and can thus better measure promoter usage. The goal of this work was to investigate whether CAGE technology is superior to RNA-seq in detecting genetic variants that influence promoter usage. It was found that CAGE is likely somewhat better for this task. Additional RNA–seq transcript annotations were also created based on promoter annotations made using CAGE. These new annotations improved the ability of RNA-seq to detect genetic effects on promoter usage, but the annotations need to be still revised to reduce the number of false positives.
